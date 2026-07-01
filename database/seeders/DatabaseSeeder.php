@@ -2,6 +2,10 @@
 
 namespace Database\Seeders;
 
+use App\Models\Client;
+use App\Models\Invoice;
+use App\Models\InvoiceItem;
+use App\Models\Payment;
 use App\Models\User;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
@@ -21,5 +25,31 @@ class DatabaseSeeder extends Seeder
             'name' => 'Test User',
             'email' => 'test@example.com',
         ]);
+
+        Client::factory()
+            ->count(5)
+            ->create()
+            ->each(function (Client $client): void {
+                Invoice::factory()
+                    ->count(3)
+                    ->create(['client_id' => $client->id])
+                    ->each(function (Invoice $invoice): void {
+                        $items = InvoiceItem::factory()
+                            ->count(fake()->numberBetween(1, 4))
+                            ->create(['invoice_id' => $invoice->id]);
+
+                        $invoice->update([
+                            'total' => $items->sum(fn (InvoiceItem $item): float => $item->quantity * $item->unit_price),
+                        ]);
+
+                        if ($invoice->status === 'paid') {
+                            Payment::factory()->create([
+                                'invoice_id' => $invoice->id,
+                                'amount' => $invoice->total,
+                                'status' => 'succeeded',
+                            ]);
+                        }
+                    });
+            });
     }
 }
