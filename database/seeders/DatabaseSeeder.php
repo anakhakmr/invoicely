@@ -2,6 +2,8 @@
 
 namespace Database\Seeders;
 
+use App\Enums\InvoiceStatus;
+use App\Enums\PaymentStatus;
 use App\Models\Client;
 use App\Models\Invoice;
 use App\Models\InvoiceItem;
@@ -39,14 +41,14 @@ class DatabaseSeeder extends Seeder
                             ->create(['invoice_id' => $invoice->id]);
 
                         $invoice->update([
-                            'total' => $items->sum(fn (InvoiceItem $item): float => $item->quantity * $item->unit_price),
+                            'total' => $items->sum(fn (InvoiceItem $item): float => $item->quantity * (float) $item->unit_price),
                         ]);
 
-                        if ($invoice->status === 'paid') {
+                        if ($invoice->status === InvoiceStatus::Paid) {
                             Payment::factory()->create([
                                 'invoice_id' => $invoice->id,
                                 'amount' => $invoice->total,
-                                'status' => 'succeeded',
+                                'status' => PaymentStatus::Succeeded,
                             ]);
                         }
                     });

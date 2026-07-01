@@ -2,6 +2,7 @@
 
 namespace Database\Factories;
 
+use App\Enums\PaymentStatus;
 use App\Models\Invoice;
 use App\Models\Payment;
 use Illuminate\Database\Eloquent\Factories\Factory;
@@ -22,7 +23,7 @@ class PaymentFactory extends Factory
             'invoice_id' => Invoice::factory(),
             'stripe_payment_intent_id' => 'pi_'.fake()->unique()->bothify('##########????'),
             'amount' => fake()->randomFloat(2, 50, 5000),
-            'status' => fake()->randomElement(['succeeded', 'pending', 'failed']),
+            'status' => fake()->randomElement(PaymentStatus::cases()),
         ];
     }
 }
