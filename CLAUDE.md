@@ -173,3 +173,36 @@ This project has domain-specific skills available in `**/skills/**`. You MUST ac
 - Do NOT delete tests without approval.
 
 </laravel-boost-guidelines>
+
+<invoicely-project-guidelines>
+
+# Invoicely
+
+Invoicely is an invoicing app built on the Laravel Livewire starter kit. Staff create clients and invoices; clients pay them online via Stripe.
+
+## Architecture: two separate identities
+
+There are two distinct authenticatable entities in this app — do not conflate them.
+
+- **Staff** — `App\Models\User`, `web` guard, session auth via Fortify (login/register/2FA/passkeys/password reset already implemented, untouched by this project). Staff use the **Filament admin panel** (`app/Filament/`) to manage clients, invoices, and view payments.
+- **Clients** — `App\Models\Client`, `client` guard, session auth via a small dedicated Livewire login/register flow (not Fortify — Fortify only supports one guard). Clients use a client-facing web portal to view and pay their own invoices. The same `Client` identity also issues Sanctum API tokens for programmatic/API access (`routes/api.php`), so a client's web login and API token represent the same underlying record.
+
+When adding auth-related code, always be explicit about which guard it targets. Never let a client fall back to the `web` guard or vice versa.
+
+## Domain model
+
+- `Client` — `hasMany(Invoice)`
+- `Invoice` — `belongsTo(Client)`, `hasMany(InvoiceItem)`, `hasMany(Payment)`, status: draft/sent/paid/overdue
+- `InvoiceItem` — `belongsTo(Invoice)`
+- `Payment` — `belongsTo(Invoice)`, one row per Stripe payment attempt/event
+
+## Stripe
+
+- Checkout session creation logic is shared between the client portal's "Pay Now" button and the API's checkout endpoint — do not duplicate it in both places.
+- The webhook route (`routes/web.php`, CSRF-exempt) is the only place invoice status flips to `paid`. Webhook handling must be idempotent (Stripe redelivers events).
+
+## Build plan
+
+The full step-by-step build plan (and its rationale, including why Filament v5 is used instead of the v3.2 originally scoped) lives at `project-requirement.md` (original scope) — implementation proceeds one step at a time with explicit approval between steps.
+
+</invoicely-project-guidelines>
