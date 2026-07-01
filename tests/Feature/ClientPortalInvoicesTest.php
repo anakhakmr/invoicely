@@ -61,3 +61,13 @@ test('guests cannot view an invoice', function () {
     $this->get(route('client.invoices.show', $invoice))
         ->assertRedirect(route('client.login'));
 });
+
+test('the dashboard shows an empty state for a client with no invoices', function () {
+    $client = Client::factory()->create();
+
+    $this->actingAs($client, 'client');
+
+    livewire('pages::client.dashboard')
+        ->assertOk()
+        ->assertSee('You have no invoices yet.');
+});

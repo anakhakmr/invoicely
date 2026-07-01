@@ -88,6 +88,23 @@ test('the pay now button is hidden for an already paid invoice', function () {
         ->assertDontSee('Pay Now');
 });
 
+test('calling pay directly on an already paid invoice is rejected even with the button hidden', function () {
+    $client = Client::factory()->create();
+    $invoice = Invoice::factory()->create(['client_id' => $client->id, 'status' => InvoiceStatus::Paid]);
+    InvoiceItem::factory()->create(['invoice_id' => $invoice->id]);
+
+    $gateway = mockStripeCheckoutGateway();
+    $gateway->shouldNotReceive('createSession');
+
+    $this->actingAs($client, 'client');
+
+    livewire('pages::client.invoice', ['invoice' => $invoice])
+        ->call('pay')
+        ->assertNoRedirect();
+
+    expect($invoice->fresh()->stripe_checkout_session_id)->toBeNull();
+});
+
 test('the success page reconciles payment immediately if the webhook has not arrived yet', function () {
     $client = Client::factory()->create();
     $invoice = Invoice::factory()->create([

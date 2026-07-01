@@ -111,3 +111,33 @@ test('unrelated event types are acknowledged without side effects', function () 
 
     expect(Payment::count())->toBe(0);
 });
+
+test('an expired checkout session leaves the invoice unpaid and payable again', function () {
+    $invoice = Invoice::factory()->create([
+        'status' => InvoiceStatus::Sent,
+        'stripe_checkout_session_id' => 'cs_test_expired',
+    ]);
+
+    [$body, $signature] = signedStripeWebhookPayload([
+        'id' => 'evt_3',
+        'object' => 'event',
+        'type' => 'checkout.session.expired',
+        'data' => [
+            'object' => [
+                'id' => 'cs_test_expired',
+                'object' => 'checkout.session',
+                'payment_intent' => null,
+                'amount_total' => (int) ($invoice->total * 100),
+                'payment_status' => 'unpaid',
+            ],
+        ],
+    ]);
+
+    $this->call('POST', '/stripe/webhook', [], [], [], [
+        'HTTP_STRIPE_SIGNATURE' => $signature,
+        'CONTENT_TYPE' => 'application/json',
+    ], $body)->assertOk();
+
+    expect($invoice->fresh()->status)->toBe(InvoiceStatus::Sent)
+        ->and(Payment::count())->toBe(0);
+});

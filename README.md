@@ -54,6 +54,36 @@ php artisan serve
 npm run dev
 ```
 
+### Admin panel (staff)
+
+Create an admin user, then log in at `/admin`:
+
+```bash
+php artisan make:filament-user
+```
+
+Manage clients, invoices (with a line-item repeater and a live-computed total), and view the read-only payments ledger. The dashboard shows total revenue, outstanding invoices, and recent payments.
+
+### Client portal
+
+Clients don't self-register. Staff create the client record in `/admin`, then the client sets their own password via **Forgot password** at `/client/login` (an emailed reset link — with `MAIL_MAILER=log`, check `storage/logs/laravel.log` for it locally). Once logged in, a client sees only their own invoices at `/client` and can pay an unpaid invoice via the "Pay Now" button.
+
+### API
+
+Clients can also access their invoices programmatically via Sanctum tokens:
+
+```bash
+php artisan tinker --execute 'echo App\Models\Client::first()->createToken("mobile-app")->plainTextToken;'
+```
+
+```bash
+curl -H "Authorization: Bearer <token>" -H "Accept: application/json" http://localhost:8000/api/invoices
+curl -H "Authorization: Bearer <token>" -H "Accept: application/json" http://localhost:8000/api/invoices/{id}
+curl -X POST -H "Authorization: Bearer <token>" -H "Accept: application/json" http://localhost:8000/api/invoices/{id}/checkout
+```
+
+A client can only see and check out their own invoices — cross-client access returns 403.
+
 ## Testing
 
 The test suite runs against the same Postgres container (the `testing` database), so it must be running first:
@@ -87,8 +117,10 @@ STRIPE_SECRET=
 STRIPE_WEBHOOK_SECRET=
 ```
 
-For local webhook testing:
+Without real keys, checkout/webhook code paths aren't reachable manually (the test suite mocks Stripe entirely, so `php artisan test` doesn't need real keys). To try it against real Stripe test-mode keys locally, forward webhooks with the Stripe CLI:
 
 ```bash
 stripe listen --forward-to localhost:8000/stripe/webhook
 ```
+
+Copy the webhook signing secret it prints into `STRIPE_WEBHOOK_SECRET`.

@@ -27,7 +27,7 @@ class ClientFactory extends Factory
         return [
             'name' => fake()->name(),
             'email' => fake()->unique()->safeEmail(),
-            'phone' => fake()->phoneNumber(),
+            'phone' => fake()->e164PhoneNumber(),
             'company' => fake()->company(),
             'password' => static::$password ??= Hash::make('password'),
             'remember_token' => Str::random(10),
