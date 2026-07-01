@@ -31,4 +31,17 @@ enum InvoiceStatus: string implements HasColor, HasLabel
             self::Overdue => 'danger',
         };
     }
+
+    /**
+     * Color name understood by Flux UI's badge component (not Filament's semantic palette).
+     */
+    public function getFluxColor(): string
+    {
+        return match ($this) {
+            self::Draft => 'zinc',
+            self::Sent => 'blue',
+            self::Paid => 'green',
+            self::Overdue => 'red',
+        };
+    }
 }
