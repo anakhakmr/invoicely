@@ -1,6 +1,9 @@
 <?php
 
+use App\Actions\Stripe\CreateStripeCheckoutSession;
+use App\Enums\InvoiceStatus;
 use App\Models\Invoice;
+use Flux\Flux;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Title;
@@ -14,6 +17,19 @@ new #[Layout('layouts::client')] #[Title('Invoice')] class extends Component {
         abort_unless($invoice->client_id === Auth::guard('client')->id(), 403);
 
         $this->invoice = $invoice->load('items');
+    }
+
+    public function pay(CreateStripeCheckoutSession $action): void
+    {
+        try {
+            $session = $action->handle($this->invoice);
+        } catch (\RuntimeException $e) {
+            Flux::toast(variant: 'danger', text: $e->getMessage());
+
+            return;
+        }
+
+        $this->redirect($session->url);
     }
 }; ?>
 
@@ -50,11 +66,17 @@ new #[Layout('layouts::client')] #[Title('Invoice')] class extends Component {
     </flux:table>
 
     <div class="flex justify-end">
-        <div class="w-full max-w-xs space-y-2">
+        <div class="w-full max-w-xs space-y-4">
             <div class="flex justify-between">
                 <flux:heading>{{ __('Total') }}</flux:heading>
                 <flux:heading>${{ number_format((float) $invoice->total, 2) }}</flux:heading>
             </div>
+
+            @if ($invoice->status !== InvoiceStatus::Paid)
+                <flux:button variant="primary" wire:click="pay" class="w-full" data-test="pay-now-button">
+                    {{ __('Pay Now') }}
+                </flux:button>
+            @endif
         </div>
     </div>
 

@@ -12,5 +12,7 @@ Route::middleware('guest:client')->group(function () {
 Route::middleware('auth:client')->group(function () {
     Route::livewire('client', 'pages::client.dashboard')->name('client.dashboard');
     Route::livewire('client/invoices/{invoice}', 'pages::client.invoice')->name('client.invoices.show');
+    Route::livewire('client/invoices/{invoice}/checkout/success', 'pages::client.checkout-success')->name('client.invoices.checkout.success');
+    Route::livewire('client/invoices/{invoice}/checkout/cancel', 'pages::client.checkout-cancel')->name('client.invoices.checkout.cancel');
     Route::post('client/logout', LogoutClient::class)->name('client.logout');
 });
