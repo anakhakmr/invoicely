@@ -9,7 +9,19 @@ Staff manage clients and invoices through an admin panel; clients log into their
 - PHP 8.5
 - Composer
 - Node.js / NPM
-- SQLite (default) — or MySQL/PostgreSQL if you reconfigure `.env`
+- Docker (for the Postgres database — see below)
+
+## Database
+
+Postgres runs in a container via Laravel Sail's Docker Compose config (`compose.yaml`). The app itself runs natively (`php artisan serve` / `npm run dev`), only the database is containerized.
+
+```bash
+docker compose up -d pgsql
+```
+
+This starts Postgres on `127.0.0.1:5432` with the credentials already set in `.env.example` (`invoicely` / `sail` / `password`). Sail's init script also creates a `testing` database automatically, used by the test suite.
+
+To stop the container: `docker compose down` (add `-v` to also delete the data volume).
 
 ## Setup
 
@@ -23,7 +35,7 @@ npm install
 cp .env.example .env
 php artisan key:generate
 
-touch database/database.sqlite
+docker compose up -d pgsql
 php artisan migrate
 
 npm run build
@@ -44,7 +56,10 @@ npm run dev
 
 ## Testing
 
+The test suite runs against the same Postgres container (the `testing` database), so it must be running first:
+
 ```bash
+docker compose up -d pgsql
 php artisan test --compact
 ```
 

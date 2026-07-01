@@ -203,6 +203,10 @@ When adding auth-related code, always be explicit about which guard it targets. 
 - Checkout session creation logic is shared between the client portal's "Pay Now" button and the API's checkout endpoint — do not duplicate it in both places.
 - The webhook route (`routes/web.php`, CSRF-exempt) is the only place invoice status flips to `paid`. Webhook handling must be idempotent (Stripe redelivers events).
 
+## Database
+
+Postgres, run only as a Docker container (`compose.yaml`, via Laravel Sail's tooling) — the app itself runs natively, not inside Sail. Start it with `docker compose up -d pgsql` before running the app or the test suite. Sail's init script also provisions a separate `testing` database on the same container, which the Pest suite runs against (see `phpunit.xml`) — so tests require Docker running too.
+
 ## Build plan
 
 The full step-by-step build plan (and its rationale, including why Filament v5 is used instead of the v3.2 originally scoped) lives at `project-requirement.md` (original scope) — implementation proceeds one step at a time with explicit approval between steps.
