@@ -1,6 +1,9 @@
 <?php
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Livewire\Component;
+use Livewire\Features\SupportTesting\Testable;
+use Livewire\Livewire;
 use Tests\TestCase;
 
 /*
@@ -44,7 +47,13 @@ expect()->extend('toBeOne', function () {
 |
 */
 
-function something()
+/**
+ * Test a Livewire component, without depending on pestphp/pest-plugin-livewire.
+ *
+ * @param  class-string<Component>|string  $name
+ * @param  array<array-key, mixed>  $params
+ */
+function livewire(string $name, array $params = []): Testable
 {
-    // ..
+    return Livewire::test($name, $params);
 }
