@@ -124,3 +124,35 @@ stripe listen --forward-to localhost:8000/stripe/webhook
 ```
 
 Copy the webhook signing secret it prints into `STRIPE_WEBHOOK_SECRET`.
+
+## Deployment
+
+This is a runbook, not automation — nothing here has been executed against a real environment. [Laravel Cloud](https://cloud.laravel.com/) is the fastest path for a Laravel app like this if you don't already have infrastructure; the steps below apply regardless of host.
+
+1. **Database.** The local `compose.yaml`/Sail Postgres container is dev-only. Production needs a real managed/hosted Postgres instance (Laravel Cloud, RDS, a DigitalOcean/Supabase managed database, etc.) — point `DB_HOST`, `DB_PORT`, `DB_DATABASE`, `DB_USERNAME`, `DB_PASSWORD` at it. Check whether your provider requires SSL for remote connections (`DB_SSLMODE` / `sslmode=require` in the connection options).
+
+2. **Environment.** Copy `.env.example` to `.env` on the server, generate a fresh `APP_KEY` (`php artisan key:generate`), set `APP_ENV=production`, `APP_DEBUG=false`, and `APP_URL` to your real HTTPS domain.
+
+3. **Stripe live keys.** Test-mode and live-mode are entirely separate in Stripe. Swap `STRIPE_KEY`/`STRIPE_SECRET` for live-mode values, then in the Stripe Dashboard register a **live** webhook endpoint pointing at `https://yourdomain.com/stripe/webhook` (event: `checkout.session.completed`) and copy its signing secret into `STRIPE_WEBHOOK_SECRET`. This is a separate registration from any test-mode/CLI webhook you used locally.
+
+4. **HTTPS.** Required by Stripe for live webhooks. Make sure TLS actually terminates somewhere in front of the app (the hosting platform, a load balancer, or a reverse proxy like Nginx/Caddy) — Laravel itself doesn't serve TLS.
+
+5. **Migrations.** `php artisan migrate --force` (the `--force` flag is required in production since the interactive confirmation prompt is skipped there).
+
+6. **Queue worker.** The Stripe webhook handler itself runs synchronously (no queued jobs), but `QUEUE_CONNECTION=database` is still used elsewhere (e.g. Fortify's notification emails), so a persistent worker process is still needed: `php artisan queue:work` under Supervisor/systemd, or your platform's managed worker feature.
+
+7. **Build & optimize.**
+   ```bash
+   composer install --optimize-autoloader --no-dev
+   npm run build
+   php artisan config:cache
+   php artisan route:cache
+   php artisan view:cache
+   php artisan event:cache
+   php artisan filament:optimize
+   ```
+   Re-run the cache commands after every deploy that changes config, routes, or views — stale caches are a common source of "it works locally but not in prod" bugs.
+
+8. **First admin user.** `php artisan make:filament-user` on the production server (or a one-off Artisan command in your deploy pipeline). Production's password rules are already stricter than local (see `AppServiceProvider::configureDefaults()` — 12+ characters, mixed case, symbols, and checked against known breaches when `app()->isProduction()`).
+
+9. **Backups.** Set up automated backups for the production Postgres database — most managed providers offer point-in-time recovery or scheduled snapshots out of the box; if self-hosting, schedule `pg_dump` and store it off-server. Periodically test that a backup actually restores.
