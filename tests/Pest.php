@@ -1,6 +1,9 @@
 <?php
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Livewire\Component;
+use Livewire\Features\SupportTesting\Testable;
+use Livewire\Livewire;
 use Tests\TestCase;
 
 /*
@@ -44,7 +47,30 @@ expect()->extend('toBeOne', function () {
 |
 */
 
-function something()
+/**
+ * Test a Livewire component, without depending on pestphp/pest-plugin-livewire.
+ *
+ * @param  class-string<Component>|string  $name
+ * @param  array<array-key, mixed>  $params
+ */
+function livewire(string $name, array $params = []): Testable
 {
-    // ..
+    return Livewire::test($name, $params);
+}
+
+/**
+ * Build a JSON body + Stripe-Signature header pair, signed the same way
+ * Stripe signs real webhook requests, for testing StripeWebhookController.
+ *
+ * @param  array<array-key, mixed>  $payload
+ * @return array{0: string, 1: string}
+ */
+function signedStripeWebhookPayload(array $payload, ?string $secret = null): array
+{
+    $secret ??= config('services.stripe.webhook_secret');
+    $body = json_encode($payload);
+    $timestamp = time();
+    $signature = hash_hmac('sha256', "{$timestamp}.{$body}", $secret);
+
+    return [$body, "t={$timestamp},v1={$signature}"];
 }

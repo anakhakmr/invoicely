@@ -187,24 +187,43 @@ Invoicely is an invoicing app built on the Laravel Livewire starter kit. Staff c
 There are two distinct authenticatable entities in this app — do not conflate them.
 
 - **Staff** — `App\Models\User`, `web` guard, session auth via Fortify (login/register/2FA/passkeys/password reset already implemented, untouched by this project). Staff use the **Filament admin panel** (`app/Filament/`) to manage clients, invoices, and view payments.
-- **Clients** — `App\Models\Client`, `client` guard, session auth via a small dedicated Livewire login/register flow (not Fortify — Fortify only supports one guard). Clients use a client-facing web portal to view and pay their own invoices. The same `Client` identity also issues Sanctum API tokens for programmatic/API access (`routes/api.php`), so a client's web login and API token represent the same underlying record.
+- **Clients** — `App\Models\Client`, `client` guard, session auth via a small dedicated Livewire login flow (not Fortify — Fortify only supports one guard). There is **no client self-registration**: staff create the Client record in Filament (no password), and the client gets portal access via "forgot password" against the `clients` password broker (`config/auth.php`) — this is intentional, to stop anyone claiming a fake client account. The same `Client` identity also issues Sanctum API tokens for programmatic/API access (`routes/api.php`), so a client's web login and any API token represent the same underlying record.
 
 When adding auth-related code, always be explicit about which guard it targets. Never let a client fall back to the `web` guard or vice versa.
 
 ## Domain model
 
 - `Client` — `hasMany(Invoice)`
-- `Invoice` — `belongsTo(Client)`, `hasMany(InvoiceItem)`, `hasMany(Payment)`, status: draft/sent/paid/overdue
+- `Invoice` — `belongsTo(Client)`, `hasMany(InvoiceItem)`, `hasMany(Payment)`, status: draft/sent/paid/overdue (`App\Enums\InvoiceStatus`)
 - `InvoiceItem` — `belongsTo(Invoice)`
-- `Payment` — `belongsTo(Invoice)`, one row per Stripe payment attempt/event
+- `Payment` — `belongsTo(Invoice)`, one row per successful Stripe payment, status: pending/succeeded/failed (`App\Enums\PaymentStatus`)
+
+Both status enums implement Filament's `HasColor`/`HasLabel`; `InvoiceStatus` also has `getFluxColor()` since Flux's `<flux:badge color="">` uses a different palette than Filament's semantic colors (gray/info/success/danger) — don't pass `getColor()`'s output straight into a Flux component.
+
+## Authorization
+
+`App\Policies\InvoicePolicy` is a **single policy serving two different identities** — Laravel auto-discovers it for `Invoice::class` regardless of which guard is active, so it's used both by Filament's `InvoiceResource` (staff, `web` guard) and the API/policy checks for clients. Every method branches on `$user instanceof Client` vs `User`. If you add a new ability here, grant `User` unconditional access (or Filament's admin panel silently breaks) and restrict `Client` to their own records. The client portal's own pages (dashboard, invoice detail) don't go through this policy at all — they use a direct `abort_unless($invoice->client_id === ...)` check instead, matching the pattern from before the policy existed.
 
 ## Stripe
 
-- Checkout session creation logic is shared between the client portal's "Pay Now" button and the API's checkout endpoint — do not duplicate it in both places.
-- The webhook route (`routes/web.php`, CSRF-exempt) is the only place invoice status flips to `paid`. Webhook handling must be idempotent (Stripe redelivers events).
+- `App\Actions\Stripe\CreateStripeCheckoutSession` builds the Checkout Session from an invoice's items and is shared by both the portal's "Pay Now" button and the API's checkout endpoint — do not duplicate this logic.
+- `App\Actions\Stripe\RecordStripeInvoicePayment` idempotently marks an invoice paid + records the Payment row. It's called from **two places**: the webhook (`StripeWebhookController`) and the checkout success page (which reconciles immediately in case the webhook hasn't arrived yet — a very common real-world race). Both call sites must stay idempotent; the unique constraint on `payments.stripe_payment_intent_id` is the backstop.
+- The webhook route (`routes/web.php`, CSRF-exempt via `bootstrap/app.php`'s `validateCsrfTokens(except:)`) only ever calls that same action — never update invoice/payment state anywhere else.
+- `App\Actions\Stripe\StripeCheckoutGateway` wraps the two Stripe SDK calls we use (`checkout.sessions.create`/`retrieve`) behind two plain methods. This exists purely for testability — mocking the Stripe SDK's own nested service-factory objects directly (`$stripeClient->checkout->sessions->create(...)`) is fragile with Mockery. Always inject/mock `StripeCheckoutGateway`, never `StripeClient` directly, in new Stripe-touching code.
+- Test webhooks with real signed payloads via the `signedStripeWebhookPayload()` helper in `tests/Pest.php` (genuine HMAC signing against `STRIPE_WEBHOOK_SECRET`), not by skipping signature verification.
+
+## Database
+
+Postgres, run only as a Docker container (`compose.yaml`, via Laravel Sail's tooling) — the app itself runs natively, not inside Sail. Start it with `docker compose up -d pgsql` before running the app or the test suite. Sail's init script also provisions a separate `testing` database on the same container, which the Pest suite runs against (see `phpunit.xml`) — so tests require Docker running too.
+
+## Testing gotchas learned the hard way
+
+- **Factory data must satisfy real validation rules, not just column types.** `ClientFactory`'s phone field uses `fake()->e164PhoneNumber()`, not `fake()->phoneNumber()` — the latter occasionally generates US-style numbers with extensions (`x1234`) that fail Filament's `TextInput::tel()` regex validation, causing an intermittent (~30-50% of runs) Filament form-save failure that looked exactly like test-infrastructure flakiness. If a Filament create/edit test flakes with "no notification sent," check the form's actual validation errors before assuming it's non-deterministic — it probably isn't.
+- Livewire v4 page components (`Route::livewire(...)`) default to wrapping in `layouts::app` (the staff sidebar) unless given an explicit `#[Layout('layouts::...')]` attribute. Manually wrapping a component's own Blade markup in a full layout tag on top of that causes a "multiple root elements" crash. Client-facing pages use `#[Layout('layouts::auth')]` or `#[Layout('layouts::client')]` with fragment-only markup.
+- `Livewire::test('pages::some.view')` (string-based) works for full-page SFC components without needing `pestphp/pest-plugin-livewire` — see the `livewire()` helper in `tests/Pest.php`, which wraps `Livewire::test()` directly.
 
 ## Build plan
 
-The full step-by-step build plan (and its rationale, including why Filament v5 is used instead of the v3.2 originally scoped) lives at `project-requirement.md` (original scope) — implementation proceeds one step at a time with explicit approval between steps.
+The full step-by-step build plan (and its rationale, including why Filament v5 is used instead of the v3.2 originally scoped) lives at `project-requirement.md` (original scope) — implementation proceeded one step at a time with explicit approval between steps, through Step 8 (full test pass & cleanup). Step 9 (deployment checklist) is documentation-only guidance, not executed in this environment.
 
 </invoicely-project-guidelines>
